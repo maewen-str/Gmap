@@ -11,4 +11,4 @@ run: gmap
 	./gmap
 
 clean:
-	rm -f main
+	rm -f gmap
