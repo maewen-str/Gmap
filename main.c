@@ -4,7 +4,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <arpa/inet.h>
-
+#include <netdb.h>
 
 #include "scan.h"
 
@@ -25,7 +25,15 @@ int main(int argc, char* argv[]){
     int open_port_counter = 0;
     for(int port = start_port; port < end_port+1;  port++) {
         if(scan_port(target_addr,port) == 0) {
-            printf("PORT %d is OPEN\n",port);
+            struct servent  *service = getservbyport(htons(port),"tcp"); // Uses /etc/services
+
+
+            if (service != NULL) {
+                printf("PORT %d is OPEN (%s)\n",port,service->s_name);
+            } else {
+                printf("PORT %d is OPEN (unknown)\n",port);
+            }
+
             open_port_counter++;
         }
 

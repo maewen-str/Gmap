@@ -2,14 +2,13 @@ CC = gcc
 CFLAGS = -Wall -Wextra
 LFLAGS =
 
-# The first target is the default when you just type 'make'
-all: main
+all: gmap
 
-main: main.c scan.c
-	$(CC) $(CFLAGS) main.c scan.c -o main $(LFLAGS)
+gmap: main.c scan.c
+	$(CC) $(CFLAGS) main.c scan.c -o gmap $(LFLAGS)
 
-run: main
-	./main
+run: gmap
+	./gmap
 
 clean:
 	rm -f main
