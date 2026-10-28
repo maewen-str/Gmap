@@ -21,18 +21,27 @@ int run_scanner(ScanConfig *config) {
     printf("Scanning %s from port %d to %d... \n",config->target_ip,config->start_port, config->end_port);
 
     for (int port = config->start_port; port <= config->end_port; port++){
-         if (config->is_tcp) {
-             if (scan_tcp(target_addr, port) == 0) {
+        if (config->is_tcp) {
+            if (scan_tcp(target_addr, port) == 0) {
                 struct servent  *service = getservbyport(htons(port),"tcp"); // Uses /etc/services
+                const char *service_name = (service != NULL) ? service->s_name : "unknown";
+                printf("PORT %d is OPEN (%s) | (TCP)\n", port, service_name);
+            }
+        }
+        if (config->is_udp) {
+            int udp_status = scan_udp(target_addr, port);
+            if (udp_status == 0 || udp_status == 1){
+                struct servent *service = getservbyport(htons(port),"udp");
+                const char *service_name = (service != NULL) ? service->s_name : "unknown";
 
-                if (service != NULL) {
-                    printf("PORT %d is OPEN (%s) | (TCP)\n",port,service->s_name);
-                } else {
-                    printf("PORT %d is OPEN (unknown) | (TCP)\n",port);
+                if (udp_status == 0) {
+                    printf("PORT %d is OPEN (%s) | (UDP)\n",port, service_name);
+                } else if (udp_status == 1) {
+                    printf("PORT %d is OPEN|FILTERED (%s) | (UDP)\n",port, service_name);
                 }
-
-             }
-         }
+            }
+        }
     }
+    return 0;
 
 }

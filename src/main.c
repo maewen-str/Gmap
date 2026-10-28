@@ -20,5 +20,10 @@ int main(int argc, char* argv[]){
 
     run_scanner(&config);
 
+    // UDP scan
+    config.is_tcp = 0;
+    config.is_udp = 1;
+
+    run_scanner(&config);
     return 0;
 }
