@@ -28,6 +28,8 @@ int run_scanner(ScanConfig *config) {
                 printf("PORT %d is OPEN (%s) | (TCP)\n", port, service_name);
             }
         }
+    }
+    for (int port = config->start_port; port <= config->end_port; port++){
         if (config->is_udp) {
             int udp_status = scan_udp(target_addr, port);
             if (udp_status == 0 || udp_status == 1){
