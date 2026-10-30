@@ -17,6 +17,8 @@ typedef struct {
     struct sockaddr_in target_addr;
     int port;
     int protocol; // 1 for TCP , 2 for UDP
+    int status; // 0 = Closed, 1 = Open, 2 = Open|Filtered
+    char service_name[32];
 } ThreadArgs;
 
 

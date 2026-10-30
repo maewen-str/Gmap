@@ -15,11 +15,12 @@ pthread_mutex_t console_mutex = PTHREAD_MUTEX_INITIALIZER;
 void *scan_worker(void *arg) {
     ThreadArgs *args = (ThreadArgs *) arg; // Deference the argument pointer into our threadarg  type
     int port = args->port;
-
+    args->status = 0;
     // With this protocol argument  both type of scan cannot be executed by the same thread
     // This unreadable output and UDP scan for a port that drags the TCP scan.
     if (args->protocol == 1) {
         if (scan_tcp(args->target_addr, port) == 0) {
+            args->status = 1;
             // We are force  to put a mutex here since each thread is reading /etc/services
             // this could create race condition.
             pthread_mutex_lock(&console_mutex);
@@ -33,16 +34,11 @@ void *scan_worker(void *arg) {
     if (args->protocol == 2) {
         int udp_status = scan_udp(args->target_addr, port);
         if (udp_status == 0 || udp_status == 1){
+            args->status = (udp_status == 0) ? 1 : 2; // 1 = Open ; 2 = Open | Filtered
 
             pthread_mutex_lock(&console_mutex);
             struct servent *service = getservbyport(htons(port),"udp");
-            const char *service_name = (service != NULL) ? service->s_name : "unknown";
-
-            if (udp_status == 0) {
-                printf("PORT %d is OPEN (%s) | (UDP)\n",port, service_name);
-            } else if (udp_status == 1) {
-                printf("PORT %d is OPEN|FILTERED (%s) | (UDP)\n",port, service_name);
-            }
+            strncpy(args->service_name,(service != NULL) ? service->s_name : "unknown",31);
             pthread_mutex_unlock(&console_mutex);
         }
     }
@@ -84,6 +80,12 @@ int run_scanner(ScanConfig *config) {
                 for (int i = 0; i < thread_count; i++) {
                     pthread_join(threads[i], NULL);
                 }
+                for (int i = 0; i < thread_count; i++) {
+                    if (args_array[i].status == 1) {
+                        printf("PORT %d is OPEN (%s) | (TCP)\n",
+                               args_array[i].port, args_array[i].service_name);
+                    }
+                }
                 thread_count = 0;
             }
         }
@@ -102,6 +104,16 @@ int run_scanner(ScanConfig *config) {
             if(thread_count == MAX_THREADS || port == config->end_port ) {
                 for (int i = 0; i < thread_count; i++) {
                     pthread_join(threads[i], NULL);
+                }
+
+                for (int i = 0; i < thread_count; i++) {
+                    if (args_array[i].status == 1) {
+                        printf("PORT %d is OPEN (%s) | (UDP)\n",
+                                args_array[i].port, args_array[i].service_name);
+                    } else if (args_array[i].status == 2) {
+                        printf("PORT %d is OPEN|FILTERED (%s) | (UDP)\n",
+                                args_array[i].port, args_array[i].service_name);
+                    }
                 }
                 thread_count = 0;
             }
