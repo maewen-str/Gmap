@@ -1,6 +1,6 @@
 CC = gcc
 # Added -I./include so gcc knows where your header files live
-CFLAGS = -Wall -Wextra -Wimplicit-function-declaration -I./include
+CFLAGS = -Wall -Wextra -Wimplicit-function-declaration -I./include -pthread
 LFLAGS =
 
 SRC_DIR = src

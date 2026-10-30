@@ -12,6 +12,16 @@ typedef struct {
     int num_threads;  // Flag for threads (-n)
 } ScanConfig;
 
+// Structure to pass argument to thread
+typedef struct {
+    struct sockaddr_in target_addr;
+    int port;
+    int protocol; // 1 for TCP , 2 for UDP
+} ThreadArgs;
+
+
+
+
 // Main engine controller
 int run_scanner(ScanConfig *config);
 
