@@ -46,9 +46,6 @@ void *scan_worker(void *arg) {
             pthread_mutex_unlock(&console_mutex);
         }
     }
-
-    // Free the memory for this threads args
-    free(args);
     return NULL;
 }
 
@@ -67,19 +64,21 @@ int run_scanner(ScanConfig *config) {
     printf("Scanning %s from port %d to %d... \n",config->target_ip,config->start_port, config->end_port);
 
     pthread_t threads[MAX_THREADS];
+    ThreadArgs args_array[MAX_THREADS];
     int thread_count = 0;
 
     //Run TCP scan first
     if (config->is_tcp) {
         printf("\n--- Starting TCP Scan ---\n");
         for (int port = config->start_port; port <= config->end_port; port++) {
-            ThreadArgs *args = malloc(sizeof(ThreadArgs));
-            args->target_addr = target_addr;
-            args->port = port;
-            args->protocol = 1; // TCP
+            // Instead of doing a dynamic malloc for every port which is really slow.
+            // It is better to manage a preallocated array of value to pass to thread.
+            args_array[thread_count].target_addr = target_addr;
+            args_array[thread_count].port = port;
+            args_array[thread_count].protocol = 1; // TCP
 
-            pthread_create(&threads[thread_count++], NULL, scan_worker, args);
-
+            pthread_create(&threads[thread_count], NULL, scan_worker, &args_array[thread_count]);
+            thread_count++;
 
             if(thread_count == MAX_THREADS || port == config->end_port ) {
                 for (int i = 0; i < thread_count; i++) {
@@ -93,13 +92,13 @@ int run_scanner(ScanConfig *config) {
     if (config->is_udp) {
         printf("\n--- Starting UDP Scan ---\n");
         for (int port = config->start_port; port <= config->end_port; port++) {
-            ThreadArgs *args = malloc(sizeof(ThreadArgs));
-            args->target_addr = target_addr;
-            args->port = port;
-            args->protocol = 2; // UDP
 
-            pthread_create(&threads[thread_count++], NULL, scan_worker, args);
+            args_array[thread_count].target_addr = target_addr;
+            args_array[thread_count].port = port;
+            args_array[thread_count].protocol = 2; // UDP
 
+            pthread_create(&threads[thread_count], NULL, scan_worker, &args_array[thread_count]);
+            thread_count++;
             if(thread_count == MAX_THREADS || port == config->end_port ) {
                 for (int i = 0; i < thread_count; i++) {
                     pthread_join(threads[i], NULL);
