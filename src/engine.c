@@ -1,11 +1,11 @@
 #include "../include/scanner.h"
 #include <bits/pthreadtypes.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <arpa/inet.h>
 #include <sys/socket.h>
 #include <netdb.h>
-#include <stdlib.h>
 #include <pthread.h>
 
 #define MAX_THREADS 256
@@ -25,8 +25,9 @@ void *scan_worker(void *arg) {
             // this could create race condition.
             pthread_mutex_lock(&console_mutex);
             struct servent  *service = getservbyport(htons(port),"tcp"); // Uses /etc/services
-            const char *service_name = (service != NULL) ? service->s_name : "unknown";
-            printf("PORT %d is OPEN (%s) | (TCP)\n", port, service_name);
+            strncpy(args->service_name, (service != NULL) ? service->s_name : "unknown", 31);
+            // Safeguard in case service name is too long
+            args->service_name[31] = '\0';
             pthread_mutex_unlock(&console_mutex);
         }
     }
@@ -39,10 +40,50 @@ void *scan_worker(void *arg) {
             pthread_mutex_lock(&console_mutex);
             struct servent *service = getservbyport(htons(port),"udp");
             strncpy(args->service_name,(service != NULL) ? service->s_name : "unknown",31);
+            // Safeguard in case service name is too long
+            args->service_name[31] = '\0';
             pthread_mutex_unlock(&console_mutex);
         }
     }
     return NULL;
+}
+
+void run_protocol_scan(ScanConfig *config, struct sockaddr_in target_addr, int protocol) {
+    pthread_t threads[MAX_THREADS];
+    ThreadArgs args_array[MAX_THREADS];
+    int thread_count = 0;
+    const char *proto_name = (protocol == 1) ? "TCP" : "UDP";
+
+    printf("\n--- Starting %s Scan ---\n", proto_name);
+
+    for (int port = config->start_port; port <= config->end_port; port++) {
+        // Instead of doing a dynamic malloc for every port which is really slow.
+        // It is better to manage a preallocated array of value to pass to thread.
+
+        memset(&args_array[thread_count], 0, sizeof(ThreadArgs));
+        args_array[thread_count].target_addr = target_addr;
+        args_array[thread_count].port = port;
+        args_array[thread_count].protocol = protocol;
+        args_array[thread_count].status = 0; // Default to closed
+
+        pthread_create(&threads[thread_count], NULL, scan_worker, &args_array[thread_count]);
+        thread_count++;
+
+        if (thread_count == MAX_THREADS || port == config->end_port) {
+            for (int i = 0; i < thread_count; i++){
+                pthread_join(threads[i],NULL);
+            }
+
+            for (int i = 0; i < thread_count; i++){
+                if (args_array[i].status == 1) {
+                    printf("PORT %d is OPEN (%s) | (%s)\n",args_array[i].port,args_array[i].service_name,proto_name); // Shared case between TCP and UDP
+                } else if (args_array[i].status == 2 && protocol == 2) {
+                    printf("PORT %d is OPEN|FILTERED (%s) | (UDP)\n",args_array[i].port,args_array[i].service_name);
+                }
+            }
+            thread_count = 0;
+        }
+    }
 }
 
 int run_scanner(ScanConfig *config) {
@@ -59,66 +100,10 @@ int run_scanner(ScanConfig *config) {
 
     printf("Scanning %s from port %d to %d... \n",config->target_ip,config->start_port, config->end_port);
 
-    pthread_t threads[MAX_THREADS];
-    ThreadArgs args_array[MAX_THREADS];
-    int thread_count = 0;
-
-    //Run TCP scan first
-    if (config->is_tcp) {
-        printf("\n--- Starting TCP Scan ---\n");
-        for (int port = config->start_port; port <= config->end_port; port++) {
-            // Instead of doing a dynamic malloc for every port which is really slow.
-            // It is better to manage a preallocated array of value to pass to thread.
-            args_array[thread_count].target_addr = target_addr;
-            args_array[thread_count].port = port;
-            args_array[thread_count].protocol = 1; // TCP
-
-            pthread_create(&threads[thread_count], NULL, scan_worker, &args_array[thread_count]);
-            thread_count++;
-
-            if(thread_count == MAX_THREADS || port == config->end_port ) {
-                for (int i = 0; i < thread_count; i++) {
-                    pthread_join(threads[i], NULL);
-                }
-                for (int i = 0; i < thread_count; i++) {
-                    if (args_array[i].status == 1) {
-                        printf("PORT %d is OPEN (%s) | (TCP)\n",
-                               args_array[i].port, args_array[i].service_name);
-                    }
-                }
-                thread_count = 0;
-            }
-        }
-    }
-    // Then run UDP
-    if (config->is_udp) {
-        printf("\n--- Starting UDP Scan ---\n");
-        for (int port = config->start_port; port <= config->end_port; port++) {
-
-            args_array[thread_count].target_addr = target_addr;
-            args_array[thread_count].port = port;
-            args_array[thread_count].protocol = 2; // UDP
-
-            pthread_create(&threads[thread_count], NULL, scan_worker, &args_array[thread_count]);
-            thread_count++;
-            if(thread_count == MAX_THREADS || port == config->end_port ) {
-                for (int i = 0; i < thread_count; i++) {
-                    pthread_join(threads[i], NULL);
-                }
-
-                for (int i = 0; i < thread_count; i++) {
-                    if (args_array[i].status == 1) {
-                        printf("PORT %d is OPEN (%s) | (UDP)\n",
-                                args_array[i].port, args_array[i].service_name);
-                    } else if (args_array[i].status == 2) {
-                        printf("PORT %d is OPEN|FILTERED (%s) | (UDP)\n",
-                                args_array[i].port, args_array[i].service_name);
-                    }
-                }
-                thread_count = 0;
-            }
-        }
-    }
+    // Run TCP first
+    if(config->is_tcp) run_protocol_scan(config, target_addr, 1);
+    //Then UDP scan
+    if(config->is_udp) run_protocol_scan(config, target_addr, 2);
 
     return 0;
 

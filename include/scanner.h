@@ -26,7 +26,8 @@ typedef struct {
 
 // Main engine controller
 int run_scanner(ScanConfig *config);
-
+void *scan_worker(void *arg);
+void run_protocol_scan(ScanConfig *config, struct sockaddr_in target_addr, int protocol);
 
 // Protocol-specific functions
 int scan_tcp(struct sockaddr_in target_addr, int port);
